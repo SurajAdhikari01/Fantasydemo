@@ -69,6 +69,11 @@
             background: rgba(255, 107, 107, 0.2);
         }
 
+        .player-card-locked {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         .player-card-avatar {
             height: 100px;
             width: 100px;
@@ -130,6 +135,11 @@
             font-weight: bold;
         }
 
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
         #teamSummary {
             margin-top: 20px;
             background: rgba(0, 0, 0, 0.3);
@@ -168,7 +178,7 @@
             <div id="gameArea" class="hidden">
                 <h2 id="welcomeMessage"></h2>
                 <div class="player-grid" id="playersList"></div>
-                <button onclick="calculateTeamScore()">Finalize Team <i class="fas fa-check-circle"></i></button>
+                <button id="finalizeTeamBtn" onclick="calculateTeamScore()">Finalize Team <i class="fas fa-check-circle"></i></button>
                 
                 <div id="teamSummary" class="hidden"></div>
             </div>
@@ -191,10 +201,11 @@
 
         let selectedPlayers = [];
         let playerName = '';
+        let gameFinalized = false;
 
         function isUniqueUsername(name) {
             return !Object.keys(localStorage).some(key => 
-                key.toLowerCase() === name.toLowerCase() && key !== 'debug'
+                key.toLowerCase() === `player_${name.toLowerCase()}` && key !== 'debug'
             );
         }
 
@@ -214,13 +225,24 @@
             document.getElementById('registration').classList.add('hidden');
             document.getElementById('gameArea').classList.remove('hidden');
             document.getElementById('welcomeMessage').textContent = `Welcome, ${playerName}! Build Your Team`;
+            
+            // Check if user has already played and team is finalized
+            const playerGameState = JSON.parse(localStorage.getItem(`player_${playerName}_game_state`));
+            if (playerGameState && playerGameState.finalized) {
+                gameFinalized = true;
+                document.getElementById('finalizeTeamBtn').disabled = true;
+            }
+            
             renderPlayers();
+            updateLeaderboard();
         }
 
         function renderPlayers() {
             const playersList = document.getElementById('playersList');
             playersList.innerHTML = players.map(player => `
-                <div class="player-card player-card-mystery" data-id="${player.id}" onclick="togglePlayer(this)">
+                <div class="player-card player-card-mystery ${gameFinalized ? 'player-card-locked' : ''}" 
+                     data-id="${player.id}" 
+                     onclick="${!gameFinalized ? 'togglePlayer(this)' : ''}">
                     <div class="player-card-avatar" style="background-color:${player.color}; color:white;">
                         ${player.name[0]}
                     </div>
@@ -230,6 +252,8 @@
         }
 
         function togglePlayer(card) {
+            if (gameFinalized) return;
+
             const playerId = parseInt(card.dataset.id);
             const player = players.find(p => p.id === playerId);
 
@@ -244,10 +268,11 @@
 
         function updateLeaderboard() {
             const leaderboard = document.getElementById('globalLeaderboard');
-            const scores = Object.entries(localStorage)
-                .filter(([key]) => key !== 'debug')
-                .map(([name, score]) => ({ name, score: JSON.parse(score) }))
-                .sort((a, b) => b.score - a.score);
+            const leaderboardData = localStorage.getItem('global_leaderboard');
+            let scores = leaderboardData ? JSON.parse(leaderboardData) : [];
+
+            // Sort scores in descending order
+            scores.sort((a, b) => b.score - a.score);
 
             const leaderboardHTML = scores.map((entry, index) => `
                 <div class="leaderboard-entry">
@@ -276,10 +301,29 @@
             ];
 
             const totalScore = teamScores.reduce((sum, score) => sum + score, 0);
-            const previousScore = JSON.parse(localStorage.getItem(playerName) || '0');
-            const newTotalScore = previousScore + totalScore;
+            const leaderboardData = localStorage.getItem('global_leaderboard');
+            let leaderboard = leaderboardData ? JSON.parse(leaderboardData) : [];
 
-            localStorage.setItem(playerName, JSON.stringify(newTotalScore));
+            // Find existing player entry or create new one
+            let playerEntry = leaderboard.find(entry => entry.name === playerName);
+            if (!playerEntry) {
+                playerEntry = { name: playerName, score: totalScore };
+                leaderboard.push(playerEntry);
+            } else {
+                playerEntry.score += totalScore;
+            }
+
+            // Update localStorage
+            localStorage.setItem('global_leaderboard', JSON.stringify(leaderboard));
+            localStorage.setItem(`player_${playerName}_game_state`, JSON.stringify({
+                finalized: true,
+                teamMembers: selectedPlayers.map(p => p.name),
+                teamScores: teamScores,
+                totalScore: totalScore
+            }));
+
+            gameFinalized = true;
+            document.getElementById('finalizeTeamBtn').disabled = true;
 
             const teamSummary = document.getElementById('teamSummary');
             teamSummary.classList.remove('hidden');
@@ -288,9 +332,10 @@
                 <p>Team Members: ${selectedPlayers.map(p => p.name).join(', ')}</p>
                 <p>Team Scores: ${teamScores.join(', ')}</p>
                 <p>Total Team Score: ${totalScore}</p>
-                <p>Total Career Score: ${newTotalScore}</p>
             `;
 
+            // Render players in locked state
+            renderPlayers();
             updateLeaderboard();
         }
 
