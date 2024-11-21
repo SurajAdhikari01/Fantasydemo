@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fantasy League Challenge</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --dark-bg: #0f0f1a;
+            --card-bg: #1a1a2e;
+            --accent-color: #4A90E2;
+            --text-color: #e0e0ff;
+            --hover-color: #5a9aef;
+            --selection-color: #ff6b6b;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Arial', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--dark-bg), #000);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 15px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            background: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 30px;
+            padding: 40px;
+        }
+
+        .player-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .player-card {
+            background: #2A2A3E;
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.4s ease;
+            position: relative;
+        }
+
+        .player-card:hover {
+            transform: scale(1.05);
+        }
+
+        .player-card.selected {
+            border: 2px solid var(--selection-color);
+            background: rgba(255, 107, 107, 0.2);
+        }
+
+        .player-card-avatar {
+            height: 100px;
+            width: 100px;
+            margin: 0 auto 15px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            font-weight: bold;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .player-card-mystery {
+            
+            user-select: none;
+        }
+
+        .leaderboard {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 15px;
+            padding: 25px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .leaderboard-entry {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 15px;
+            background: #2A2A3E;
+            border-radius: 10px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        input, button {
+            margin: 10px 0;
+            padding: 12px 20px;
+            border-radius: 10px;
+            border: none;
+            font-size: 16px;
+            width: 100%;
+        }
+
+        input {
+            background: #3A3A50;
+            color: var(--text-color);
+        }
+
+        button {
+            background: var(--accent-color);
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        #teamSummary {
+            margin-top: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+                gap: 20px;
+                padding: 20px;
+            }
+
+            .player-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .player-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div>
+            <div id="registration">
+                <h2>Fantasy League Challenge</h2>
+                <input type="text" id="playerName" placeholder="Enter Your Name">
+                <button onclick="startGame()">Start Game <i class="fas fa-play-circle"></i></button>
+            </div>
+
+            <div id="gameArea" class="hidden">
+                <h2 id="welcomeMessage"></h2>
+                <div class="player-grid" id="playersList"></div>
+                <button onclick="calculateTeamScore()">Finalize Team <i class="fas fa-check-circle"></i></button>
+                
+                <div id="teamSummary" class="hidden"></div>
+            </div>
+        </div>
+
+        <div class="leaderboard" id="globalLeaderboard">
+            <h2>Global Leaderboard <i class="fas fa-trophy"></i></h2>
+        </div>
+    </div>
+
+    <script>
+        const players = [
+            { id: 1, name: 'Quantum', score: 85, color: '#3B82F6' },
+            { id: 2, name: 'Nova', score: 92, color: '#10B981' },
+            { id: 3, name: 'Raven', score: 78, color: '#F43F5E' },
+            { id: 4, name: 'Phoenix', score: 88, color: '#8B5CF6' },
+            { id: 5, name: 'Spectre', score: 82, color: '#6366F1' },
+            { id: 6, name: 'Atlas', score: 95, color: '#F59E0B' }
+        ];
+
+        let selectedPlayers = [];
+        let playerName = '';
+
+        function isUniqueUsername(name) {
+            return !Object.keys(localStorage).some(key => 
+                key.toLowerCase() === name.toLowerCase() && key !== 'debug'
+            );
+        }
+
+        function startGame() {
+            playerName = document.getElementById('playerName').value.trim();
+            
+            if (!playerName) {
+                alert('Please enter your name');
+                return;
+            }
+
+            if (!isUniqueUsername(playerName)) {
+                alert('This username is already taken. Please choose another.');
+                return;
+            }
+
+            document.getElementById('registration').classList.add('hidden');
+            document.getElementById('gameArea').classList.remove('hidden');
+            document.getElementById('welcomeMessage').textContent = `Welcome, ${playerName}! Build Your Team`;
+            renderPlayers();
+        }
+
+        function renderPlayers() {
+            const playersList = document.getElementById('playersList');
+            playersList.innerHTML = players.map(player => `
+                <div class="player-card player-card-mystery" data-id="${player.id}" onclick="togglePlayer(this)">
+                    <div class="player-card-avatar" style="background-color:${player.color}; color:white;">
+                        ${player.name[0]}
+                    </div>
+                    <h3>${player.name}</h3>
+                </div>
+            `).join('');
+        }
+
+        function togglePlayer(card) {
+            const playerId = parseInt(card.dataset.id);
+            const player = players.find(p => p.id === playerId);
+
+            if (selectedPlayers.includes(player)) {
+                selectedPlayers = selectedPlayers.filter(p => p !== player);
+                card.classList.remove('selected');
+            } else if (selectedPlayers.length < 4) {
+                selectedPlayers.push(player);
+                card.classList.add('selected');
+            }
+        }
+
+        function updateLeaderboard() {
+            const leaderboard = document.getElementById('globalLeaderboard');
+            const scores = Object.entries(localStorage)
+                .filter(([key]) => key !== 'debug')
+                .map(([name, score]) => ({ name, score: JSON.parse(score) }))
+                .sort((a, b) => b.score - a.score);
+
+            const leaderboardHTML = scores.map((entry, index) => `
+                <div class="leaderboard-entry">
+                    <span>${index + 1}. ${entry.name}</span>
+                    <span>${entry.score} pts</span>
+                </div>
+            `).join('');
+
+            leaderboard.innerHTML = `
+                <h2>Global Leaderboard <i class="fas fa-trophy"></i></h2>
+                ${leaderboardHTML}
+            `;
+        }
+
+        function calculateTeamScore() {
+            if (selectedPlayers.length !== 4) {
+                alert('Please select exactly 4 players');
+                return;
+            }
+
+            const teamScores = [
+                Math.floor(Math.random() * 30) + 60,
+                Math.floor(Math.random() * 30) + 60,
+                Math.floor(Math.random() * 30) + 60,
+                Math.floor(Math.random() * 30) + 60
+            ];
+
+            const totalScore = teamScores.reduce((sum, score) => sum + score, 0);
+            const previousScore = JSON.parse(localStorage.getItem(playerName) || '0');
+            const newTotalScore = previousScore + totalScore;
+
+            localStorage.setItem(playerName, JSON.stringify(newTotalScore));
+
+            const teamSummary = document.getElementById('teamSummary');
+            teamSummary.classList.remove('hidden');
+            teamSummary.innerHTML = `
+                <h3>Team Results</h3>
+                <p>Team Members: ${selectedPlayers.map(p => p.name).join(', ')}</p>
+                <p>Team Scores: ${teamScores.join(', ')}</p>
+                <p>Total Team Score: ${totalScore}</p>
+                <p>Total Career Score: ${newTotalScore}</p>
+            `;
+
+            updateLeaderboard();
+        }
+
+        // Initial leaderboard load
+        updateLeaderboard();
+    </script>
+</body>
+</html>
